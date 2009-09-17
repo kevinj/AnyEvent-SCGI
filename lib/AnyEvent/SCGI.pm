@@ -15,15 +15,16 @@ AnyEvent::SCGI - Event based SCGI server
 
 =cut
 
-our $VERSION = '1.0';
-
+our $VERSION = '1.1';
 
 =head1 SYNOPSIS
+
+A simple Hello World SCGI server running on port 22222:
 
     use AnyEvent::SCGI;
     use HTTP::Headers;
 
-    scgi_server $server_name, $port, sub {
+    my $s = scgi_server '127.0.0.1', 22222, sub {
         my $handle = shift;
         my $env = shift;
         my $content_ref = shift; # undef if none
@@ -37,15 +38,62 @@ our $VERSION = '1.0';
         );
 
         $handle->push_write($headers->as_string . "\r\nHello World!\r\n");
+        $handle->push_shutdown;
     }
+    AnyEvent->condvar->recv;
+
+=head1 DESCRIPTION
+
+Sets up a SCGI server on the specified port. Can be used with or without
+C<Coro>.  You are responsible for any daemonization and startup code.
+
+The usual C<AnyEvent> callback caveats apply; make sure you don't block or
+re-enter the event loop in a way that's not supported.  This module has been
+tested for use with C<Coro>, but if you don't want to use that, it's
+recommended that you return from the callback as quickly as possible.
+
+=head2 Using Coro
+
+If you're using Coro, here's the supported calling pattern:
+
+    use Coro;
+    use Coro::AnyEvent;
+    use AnyEvent;
+    use AnyEvent::SCGI;
+
+    my $s = scgi_server $server_name, $port, sub {
+        my $handle = shift;
+        my $env = shift;
+        my $content = shift;
+
+        # handle errors if any
+
+        async { 
+            my $stuff = expensive($content);
+            $handle->push_write(
+                $headers->as_string .
+                "\r\nHello World!\r\n$stuff"
+            );
+            $handle->push_shutdown;
+        };
+        # return before running async block
+    };
+    AE::cv->recv;
 
 =head1 FUNCTIONS
 
-=head2 scgi_server $host, $port, $handler_cb->($handle,\%env,\$content, $fatal, $error)
+=head2 scgi_server $host, $port, $handler_cb
 
-This method creates a TCP socket on the given host and port by calling C<tcp_server()> from C<AnyEvent::Socket>.
+This function creates a TCP socket on the given host and port by calling
+C<tcp_server()> from C<AnyEvent::Socket>.
 
-Calls C<$handler_cb> when a valid SCGI request has been received.  The first parameter is the C<AnyEvent::Handle> If the request has a payload, a reference to it is passed in as the C<$content> parameter.
+Calls C<$handler_cb> when a valid SCGI request has been received.  The
+callback will block other clients until it returns.
+
+=head3 $handler_cb->($handle,\%env,\$content,$fatal,$error)
+
+The first parameter is the C<AnyEvent::Handle> If the request has a payload, a
+reference to it is passed in as the C<$content> parameter.
 
 On error, C<\%env> and C<\$content> are undef and the usual C<$fatal> and
 C<$error> parameters are passed in as subsequent arguments.  On "EOF" from the
@@ -61,37 +109,41 @@ sub scgi_server($$$) {
 }
 
 sub handle_scgi {
-    my ($fh, $host, $port, $cb) = @_;
+    my $fh = shift;
+    my $host = shift;
+    my $port = shift;
+    my $cb = shift;
 
     my $handle; $handle = AnyEvent::Handle->new(
         fh => $fh,
         on_error => sub {
-            $cb->($handle, undef, undef, @_[1,2]);
-            $handle->destroy;
+            shift;
+            my $fatal = shift;
+            my $error = shift;
+            $cb->($handle, undef, undef, $fatal, $error);
         },
         on_eof => sub {
+            shift;
             $cb->($handle, undef, undef, 0, 'EOF');
-            $handle->destroy;
         },
     );
 
     $handle->push_read (netstring => sub {
-        my $env = $_[1];
+        shift;
+        my $env = shift;
         my %env = split /\0/, $env;
 
         if ($env{CONTENT_LENGTH} == 0) {
             $cb->($handle, \%env);
-            $handle->destroy;
-            return;
         }
-
-        $_[0]->push_read(chunk => $env{CONTENT_LENGTH}, sub {
-            $cb->($handle, \%env, \$_[1]);
-            $handle->destroy;
-        });
+        else {
+            $handle->push_read(chunk => $env{CONTENT_LENGTH}, sub {
+                $cb->($handle, \%env, \$_[1]);
+            });
+        }
     });
 
-    return $handle;
+    return;
 }
 
 =head1 AUTHORS

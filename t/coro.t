@@ -1,14 +1,21 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
-use Test::More tests => 18;
+use Test::More;
 
 BEGIN {
+    eval "use Coro";
+    $@ and plan skip_all => 'Need Coro for this test';
+
     $ENV{PERL_ANYEVENT_VERBOSE} = 1;
     $ENV{PERL_ANYEVENT_STRICT} = 1;
     $ENV{PERL_ANYEVENT_MODEL} = 'EV';
     $ENV{PERL_ANYEVENT_AVOID_ASYNC_INTERRUPT} = 1;
 }
+
+plan tests => 26;
+
+use Coro::AnyEvent;
 
 use AnyEvent;
 use AnyEvent::Handle;
@@ -57,50 +64,62 @@ sub run_test {
     my ($server_fh,$scgi_fh) = portable_socketpair();
 
     ok $server_fh && $scgi_fh, 'set up socketpair';
+    my $done = AE::cv;
 
-    my $server_done = AE::cv;
-    my $server = AnyEvent::Handle->new(
+    my $check = 0;
+
+    $done->begin;
+    my $server; $server = AnyEvent::Handle->new(
         fh => $server_fh,
         no_delay => 1,
         on_error => sub { 
-            $server_done->croak("server error $_[1]");
+            $done->croak("server error $_[1]");
         },
-        on_eof => sub { $server_done->send },
     );
     ok $server, 'made a server handle';
 
-    {
+    async {
         my $netstring = length($headers).":$headers,";
         $netstring .= $content if $content;
         $server->push_write($netstring);
-    }
 
-    {
         $server->push_read(line => "\r\n", sub {
-            is $_[1], 'any old response', 'expected response';
-            $server_done->send;
+            shift;
+            my $got = shift;
+            $check++;
+            is $got, 'any old response', 'server got expected response';
+            pass 'server done';
+            $done->end;
         });
-        pass 'set up server read';
-    }
 
-    {
+        pass 'set up server';
+    };
+
+    $done->begin;
+    async {
         AnyEvent::SCGI::handle_scgi($scgi_fh, "foo", "666", sub {
             my ($h, $env, $content_ref, $fatal, $error) = @_;
+            isa_ok $h => 'AnyEvent::Handle', 'handler got a handle,';
 
-            ok (!$error, 'no error') or diag "server got error '$error'";
+            ok (!$error, 'no handler error') or diag "handler got error '$error'";
 
-            is_deeply $env, $expected_env, 'correctly decoded env';
-            is $$content_ref, $content, 'correct content';
+            async {
+                is_deeply $env, $expected_env, 'correctly decoded env';
+                is $$content_ref, $content, 'correct content';
 
-            $h->push_write("any old response\r\n");
-            $h->push_shutdown;
+                $h->push_write("any old response\r\n");
+                $h->push_shutdown();
+                $h->on_drain(sub { $done->end });
+                $check++;
+                pass 'async done';
+            };
+            pass 'handler done';
         });
-        pass 'set up callback';
-    }
+    };
 
-    $server_done->recv;
-    pass 'all finished';
-
+    pass 'waiting';
+    $done->recv;
+    is $check, 2, 'all finished';
 }
 
 exit 0;
