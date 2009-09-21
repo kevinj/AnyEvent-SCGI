@@ -38,7 +38,7 @@ A simple Hello World SCGI server running on port 22222:
         );
 
         $handle->push_write($headers->as_string . "\r\nHello World!\r\n");
-        $handle->push_shutdown;
+        $handle->on_drain(sub { shift->destroy }); # close the socket
     }
     AnyEvent->condvar->recv;
 
@@ -74,7 +74,7 @@ If you're using Coro, here's the supported calling pattern:
                 $headers->as_string .
                 "\r\nHello World!\r\n$stuff"
             );
-            $handle->push_shutdown;
+            $handle->on_drain(sub { shift->destroy }); # close the socket
         };
         # return before running async block
     };

@@ -109,7 +109,7 @@ sub run_test {
 
                 $h->push_write("any old response\r\n");
                 $h->push_shutdown();
-                $h->on_drain(sub { $done->end });
+                $h->on_drain(sub { shift->destroy; $done->end });
                 $check++;
                 pass 'async done';
             };

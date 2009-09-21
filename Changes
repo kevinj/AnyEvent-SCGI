@@ -1,5 +1,8 @@
 Revision history for AnyEvent-SCGI
 
+1.2     2009/09/21
+        No functional changes; update docs and tests for "on_drain" behaviour.
+
 1.1     2009/09/17
         Add support and documentation for Coro usage.
         * No longer calls destroy on the handle.

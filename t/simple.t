@@ -94,6 +94,7 @@ sub run_test {
 
             $h->push_write("any old response\r\n");
             $h->push_shutdown;
+            $h->on_drain(sub { shift->destroy });
         });
         pass 'set up callback';
     }
