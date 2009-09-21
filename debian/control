@@ -1,0 +1,20 @@
+Source: libanyevent-scgi-perl
+Section: perl
+Priority: optional
+Build-Depends: debhelper (>= 4.0.2)
+Build-Depends-Indep: perl (>= 5.8.0-7)
+Maintainer: kevinj <kevinj@topaz.socialtext.net>
+Standards-Version: 3.6.1
+
+Package: libanyevent-scgi-perl
+Architecture: all
+Depends: ${perl:Depends}, ${misc:Depends}, libanyevent-perl
+Suggests: libev-perl, libcoro-perl 
+Description: Event based SCGI server
+ Sets up a SCGI server on the specified port. Can be used with or without
+ Coro.  You are responsible for any daemonization and startup code.
+ .
+ The usual AnyEvent callback caveats apply; make sure you don't block or
+ re-enter the event loop in a way that's not supported.  This module has been
+ tested for use with Coro, but if you don't want to use that, it's
+ recommended that you return from the callback as quickly as possible.

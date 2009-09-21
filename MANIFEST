@@ -16,4 +16,5 @@ MANIFEST
 MANIFEST.SKIP
 META.yml
 README
+t/coro.t
 t/simple.t

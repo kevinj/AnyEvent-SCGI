@@ -1,0 +1,8 @@
+This is the debian package for the AnyEvent-SCGI module.
+It was created by kevinj <kevinj@topaz.socialtext.net> using dh-make-perl.
+
+This copyright info was automatically extracted from the perl module.
+It may not be accurate, so you better check the module sources
+if don't want to get into legal troubles.
+
+The upstream author is: Kevin Jones <kevinj@cpan.org>.

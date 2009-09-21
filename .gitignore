@@ -10,3 +10,7 @@ AnyEvent-SCGI-*
 cover_db
 *.swp
 MANIFEST.bak
+build-stamp
+install-stamp
+debian/libanyevent-scgi-perl*
+debian/files

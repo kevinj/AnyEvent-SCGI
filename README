@@ -1,52 +1,120 @@
-AnyEvent-SCGI
+NAME
+    AnyEvent::SCGI - Event based SCGI server
 
-The README is used to introduce the module and provide instructions on
-how to install the module, any machine dependencies it may have (for
-example C compilers and installed libraries) and any other information
-that should be provided before the module is installed.
+SYNOPSIS
+    A simple Hello World SCGI server running on port 22222:
 
-A README file is required for CPAN modules since CPAN extracts the README
-file from a module distribution so that people browsing the archive
-can use it to get an idea of the module's uses. It is usually a good idea
-to provide version information here so that people can decide whether
-fixes for the module are worth downloading.
+        use AnyEvent::SCGI;
+        use HTTP::Headers;
 
+        my $s = scgi_server '127.0.0.1', 22222, sub {
+            my $handle = shift;
+            my $env = shift;
+            my $content_ref = shift; # undef if none
+            my $fatal_error = shift;
+            my $error_string = shift;
 
-INSTALLATION
+            my $headers = HTTP::Headers->new(
+                'Status' => '200 OK',
+                'Content-Type' => 'text/plain',
+                'Connection' => 'close',
+            );
 
-To install this module, run the following commands:
+            $handle->push_write($headers->as_string . "\r\nHello World!\r\n");
+            $handle->push_shutdown;
+        }
+        AnyEvent->condvar->recv;
 
-	perl Makefile.PL
-	make
-	make test
-	make install
+DESCRIPTION
+    Sets up a SCGI server on the specified port. Can be used with or without
+    "Coro". You are responsible for any daemonization and startup code.
 
-SUPPORT AND DOCUMENTATION
+    The usual "AnyEvent" callback caveats apply; make sure you don't block
+    or re-enter the event loop in a way that's not supported. This module
+    has been tested for use with "Coro", but if you don't want to use that,
+    it's recommended that you return from the callback as quickly as
+    possible.
 
-After installing, you can find documentation for this module with the
-perldoc command.
+  Using Coro
+    If you're using Coro, here's the supported calling pattern:
 
-    perldoc AnyEvent::SCGI
+        use Coro;
+        use Coro::AnyEvent;
+        use AnyEvent;
+        use AnyEvent::SCGI;
 
-You can also look for information at:
+        my $s = scgi_server $server_name, $port, sub {
+            my $handle = shift;
+            my $env = shift;
+            my $content = shift;
 
-    RT, CPAN's request tracker
-        http://rt.cpan.org/NoAuth/Bugs.html?Dist=AnyEvent-SCGI
+            # handle errors if any
 
-    AnnoCPAN, Annotated CPAN documentation
-        http://annocpan.org/dist/AnyEvent-SCGI
+            async { 
+                my $stuff = expensive($content);
+                $handle->push_write(
+                    $headers->as_string .
+                    "\r\nHello World!\r\n$stuff"
+                );
+                $handle->push_shutdown;
+            };
+            # return before running async block
+        };
+        AE::cv->recv;
 
-    CPAN Ratings
-        http://cpanratings.perl.org/d/AnyEvent-SCGI
+FUNCTIONS
+  scgi_server $host, $port, $handler_cb
+    This function creates a TCP socket on the given host and port by calling
+    "tcp_server()" from "AnyEvent::Socket".
 
-    Search CPAN
-        http://search.cpan.org/dist/AnyEvent-SCGI
+    Calls $handler_cb when a valid SCGI request has been received. The
+    callback will block other clients until it returns.
 
+   $handler_cb->($handle,\%env,\$content,$fatal,$error)
+    The first parameter is the "AnyEvent::Handle" If the request has a
+    payload, a reference to it is passed in as the $content parameter.
 
-COPYRIGHT AND LICENCE
+    On error, "\%env" and "\$content" are undef and the usual $fatal and
+    $error parameters are passed in as subsequent arguments. On "EOF" from
+    the client, fatal is "0" and error is 'EOF'.
 
-Copyright (C) 2009 Kevin Jones
+AUTHORS
+    Jeremy Stashewsky <stash@cpan.org>
 
-This program is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself.
+    Kevin Jones <kevinj@cpan.org>
+
+BUGS
+    Please report any bugs or feature requests to "bug-anyevent-scgi at
+    rt.cpan.org", or through the web interface at
+    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=AnyEvent-SCGI>. I will
+    be notified, and then you'll automatically be notified of progress on
+    your bug as I make changes.
+
+SUPPORT
+    You can find documentation for this module with the perldoc command.
+
+        perldoc AnyEvent::SCGI
+
+    You can also look for information at:
+
+    * RT: CPAN's request tracker
+        <http://rt.cpan.org/NoAuth/Bugs.html?Dist=AnyEvent-SCGI>
+
+    * AnnoCPAN: Annotated CPAN documentation
+        <http://annocpan.org/dist/AnyEvent-SCGI>
+
+    * CPAN Ratings
+        <http://cpanratings.perl.org/d/AnyEvent-SCGI>
+
+    * Search CPAN
+        <http://search.cpan.org/dist/AnyEvent-SCGI>
+
+ACKNOWLEDGEMENTS
+COPYRIGHT & LICENSE
+    Copyright 2009 Jeremy Stashewsky Copyright 2009 Kevin Jones
+
+    Copyright 2009 Socialtext Inc., all rights reserved.
+
+    This program is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
 
